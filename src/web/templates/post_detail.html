@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Post #{{ post.id }} - MultiAgent Publisher{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h2>Post #{{ post.id }}</h2>
+    <p>{{ post.topic }}</p>
+</hgroup>
+
+<!-- Status -->
+<article>
+    <header>
+        <mark class="state-{{ post.pipeline_state }}">{{ post.pipeline_state }}</mark>
+        {% if post.fact_check_score is not none %}
+        | Fact-check: <strong>{{ "%.0f"|format(post.fact_check_score * 100) }}%</strong>
+        {% endif %}
+    </header>
+
+    <!-- Content Stages -->
+    {% if post.concept_bullet %}
+    <details open>
+        <summary><strong>Concept</strong></summary>
+        <p>{{ post.concept_bullet }}</p>
+    </details>
+    {% endif %}
+
+    {% if post.draft_text %}
+    <details>
+        <summary><strong>Draft</strong></summary>
+        <pre>{{ post.draft_text }}</pre>
+    </details>
+    {% endif %}
+
+    {% if post.formatted_text %}
+    <details>
+        <summary><strong>Formatted</strong></summary>
+        <pre>{{ post.formatted_text }}</pre>
+    </details>
+    {% endif %}
+
+    {% if post.final_text %}
+    <details open>
+        <summary><strong>Final Text</strong> (with links)</summary>
+        <div class="post-preview">{{ post.final_text | safe }}</div>
+    </details>
+    {% endif %}
+
+    {% if post.fact_check_notes %}
+    <details>
+        <summary><strong>Fact-check Notes</strong></summary>
+        <pre>{{ post.fact_check_notes }}</pre>
+    </details>
+    {% endif %}
+
+    {% if post.admin_notes %}
+    <details>
+        <summary><strong>Admin Notes</strong></summary>
+        <pre>{{ post.admin_notes }}</pre>
+    </details>
+    {% endif %}
+
+    <footer>
+        Created: {{ post.created_at.strftime('%d.%m.%Y %H:%M') if post.created_at else '-' }}
+        | Scheduled: {{ post.scheduled_at.strftime('%d.%m.%Y %H:%M') if post.scheduled_at else '-' }}
+        | Published: {{ post.published_at.strftime('%d.%m.%Y %H:%M') if post.published_at else '-' }}
+    </footer>
+</article>
+
+<!-- Actions (only for pending_review) -->
+{% if is_reviewable %}
+<article>
+    <header><strong>Actions</strong></header>
+    <div class="grid">
+        <form method="post" action="/api/posts/{{ post.id }}/approve">
+            <button type="submit" class="contrast">Approve</button>
+        </form>
+        <form method="post" action="/api/posts/{{ post.id }}/reject">
+            <button type="submit" class="secondary" onclick="return confirm('Reject this post?')">Reject</button>
+        </form>
+    </div>
+    <form method="post" action="/api/posts/{{ post.id }}/edit">
+        <label for="notes">Edit Notes:</label>
+        <textarea id="notes" name="notes" placeholder="Describe what needs to change..." required></textarea>
+        <button type="submit" class="outline">Send Edit</button>
+    </form>
+</article>
+{% endif %}
+
+<!-- Links -->
+{% if links %}
+<article>
+    <header><strong>Inserted Links</strong></header>
+    <table>
+        <thead>
+            <tr>
+                <th>Keyword</th>
+                <th>URL</th>
+                <th>Valid</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for link in links %}
+            <tr>
+                <td>{{ link.keyword }}</td>
+                <td><a href="{{ link.url }}" target="_blank">{{ link.url[:60] }}</a></td>
+                <td>{{ 'Yes' if link.is_valid else 'No' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endif %}
+
+<!-- Source Materials -->
+{% if materials %}
+<article>
+    <header><strong>Source Materials ({{ materials|length }})</strong></header>
+    {% for m in materials %}
+    <details>
+        <summary>{{ m.content_type }} - {{ m.source_url[:60] }}</summary>
+        <pre>{{ m.raw_text[:500] }}{% if m.raw_text|length > 500 %}...{% endif %}</pre>
+    </details>
+    {% endfor %}
+</article>
+{% endif %}
+
+<!-- Pipeline Events -->
+{% if events %}
+<article>
+    <header><strong>Pipeline History</strong></header>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Agent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr>
+                <td>{{ event.created_at.strftime('%d.%m %H:%M:%S') if event.created_at else '-' }}</td>
+                <td>{{ event.from_state or '-' }}</td>
+                <td><mark class="state-{{ event.to_state }}">{{ event.to_state }}</mark></td>
+                <td>{{ event.agent_name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endif %}
+
+<a href="/dashboard" role="button" class="outline">&larr; Back to Dashboard</a>
+{% endblock %}

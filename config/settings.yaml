@@ -1,0 +1,120 @@
+app_name: "Telegram MultiAgent Publisher"
+log_level: INFO
+
+agents:
+  researcher:
+    max_sources_per_topic: 10
+    search_engine: "tavily"
+    min_trust_score: 0.3
+
+  parser:
+    max_content_length: 50000
+    request_timeout: 30
+    user_agent: "TelegramMultiAgentBot/1.0"
+    supported_types:
+      - web_page
+      - pdf
+      - youtube
+
+  writer:
+    claude_model: "claude-sonnet-4-5-20250929"
+    max_tokens_concept: 200
+    max_tokens_draft: 2000
+    max_tokens_format: 1500
+    telegram_max_chars: 4096
+    style_guide: |
+      Пиши профессионально, но вовлекающе.
+      Короткие абзацы (2-3 предложения максимум).
+      Максимум один эмодзи на абзац.
+      Заканчивай провокационным вопросом или призывом к действию.
+    prompts:
+      concept: |
+        Ты контент-стратег. На основе темы "{topic}" и следующих материалов напиши концепт поста в ОДНО предложение.
+
+        Материалы:
+        {materials}
+
+        Ответь ТОЛЬКО одним предложением-концептом.
+      draft: |
+        Ты профессиональный контент-райтер для Telegram-канала.
+
+        Концепт: {concept}
+        Материалы: {materials}
+        Гайд по стилю: {style_guide}
+
+        Напиши полный текст поста. НЕ вставляй ссылки — это будет сделано позже.
+      format: |
+        Отформатируй следующий черновик для Telegram. Правила:
+        - Максимум {max_chars} символов
+        - Используй HTML-форматирование Telegram (bold, italic, code, links)
+        - Короткие абзацы
+        - Добавь уместные переносы строк
+
+        Черновик:
+        {draft}
+
+  fact_checker:
+    claude_model: "claude-sonnet-4-5-20250929"
+    confidence_threshold: 0.7
+    max_retries: 2
+    prompt: |
+      Ты фактчекер. Проверь следующий текст поста на фактическую точность,
+      сверяя с предоставленными исходными материалами.
+
+      Текст поста:
+      {post_text}
+
+      Исходные материалы:
+      {materials}
+
+      Ответь в формате JSON:
+      {{
+        "score": 0.0-1.0,
+        "claims": [
+          {{"claim": "...", "verified": true/false, "note": "..."}}
+        ],
+        "summary": "общий вывод"
+      }}
+
+  link_inserter:
+    max_links_per_post: 5
+    link_check_timeout: 10
+    claude_model: "claude-sonnet-4-5-20250929"
+    prompt: |
+      Ты специалист по расстановке ссылок в тексте.
+
+      Текст поста:
+      {post_text}
+
+      Доступные источники:
+      {sources}
+
+      Выбери до {max_links} ключевых слов/фраз в тексте, к которым уместно добавить ссылки.
+      Ответь в формате JSON:
+      [
+        {{"keyword": "ключевое слово в тексте", "url": "https://..."}}
+      ]
+
+  scheduler:
+    timezone: "Europe/Moscow"
+    default_slots:
+      - day: 0
+        time: "09:00"
+      - day: 0
+        time: "18:00"
+      - day: 2
+        time: "09:00"
+      - day: 2
+        time: "18:00"
+      - day: 4
+        time: "09:00"
+      - day: 4
+        time: "18:00"
+
+  publisher:
+    preview_before_publish: true
+    publish_delay_seconds: 5
+
+pipeline:
+  max_fact_check_loops: 3
+  auto_schedule_on_approve: true

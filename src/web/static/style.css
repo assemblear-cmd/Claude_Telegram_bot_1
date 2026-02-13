@@ -1,0 +1,48 @@
+/* State badges */
+mark.state-created { background: #6c757d; color: white; }
+mark.state-researching { background: #0d6efd; color: white; }
+mark.state-parsing { background: #0d6efd; color: white; }
+mark.state-writing { background: #0d6efd; color: white; }
+mark.state-fact_checking { background: #0d6efd; color: white; }
+mark.state-inserting_links { background: #0d6efd; color: white; }
+mark.state-pending_review { background: #ffc107; color: #212529; }
+mark.state-admin_editing { background: #ffc107; color: #212529; }
+mark.state-scheduling { background: #198754; color: white; }
+mark.state-scheduled { background: #198754; color: white; }
+mark.state-publishing { background: #198754; color: white; }
+mark.state-published { background: #198754; color: white; }
+mark.state-rejected { background: #dc3545; color: white; }
+mark.state-failed { background: #dc3545; color: white; }
+
+mark {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+/* Post preview */
+.post-preview {
+    background: var(--pico-card-background-color);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--pico-muted-border-color);
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
+/* Pipeline history table */
+table {
+    font-size: 0.9em;
+}
+
+/* Navigation styling */
+nav ul {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+nav ul li a {
+    font-size: 0.85em;
+    padding: 4px 8px;
+}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title or "Dashboard" }} - MultiAgent Publisher{% endblock %}
+
+{% block content %}
+<hgroup>
+    <h2>{{ page_title or "Dashboard" }}</h2>
+    <p>Posts in the pipeline</p>
+</hgroup>
+
+{% if error %}
+<article>
+    <p role="alert">{{ error }}</p>
+</article>
+{% endif %}
+
+<!-- New Post Form -->
+<details>
+    <summary>Create New Post</summary>
+    <form method="post" action="/api/posts/new">
+        <fieldset role="group">
+            <input type="text" name="topic" placeholder="Enter topic..." required>
+            <button type="submit">Create</button>
+        </fieldset>
+    </form>
+</details>
+
+<!-- State Filter -->
+{% if all_states %}
+<nav>
+    <ul>
+        <li><a href="/dashboard" {% if not filter_state %}class="contrast"{% endif %}>All</a></li>
+        {% for state in all_states %}
+        <li><a href="/dashboard?state={{ state }}" {% if filter_state == state %}class="contrast"{% endif %}>{{ state }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Posts Table -->
+{% if posts %}
+<figure>
+<table>
+    <thead>
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">Topic</th>
+            <th scope="col">State</th>
+            <th scope="col">Created</th>
+            <th scope="col">Scheduled</th>
+            <th scope="col">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for post in posts %}
+        <tr>
+            <td>{{ post.id }}</td>
+            <td><a href="/posts/{{ post.id }}">{{ post.topic[:50] }}</a></td>
+            <td>
+                <mark class="state-{{ post.pipeline_state }}">
+                    {{ post.pipeline_state }}
+                </mark>
+            </td>
+            <td>{{ post.created_at.strftime('%d.%m %H:%M') if post.created_at else '-' }}</td>
+            <td>{{ post.scheduled_at.strftime('%d.%m %H:%M') if post.scheduled_at else '-' }}</td>
+            <td><a href="/posts/{{ post.id }}" role="button" class="outline">View</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</figure>
+{% else %}
+<p>No posts found.</p>
+{% endif %}
+{% endblock %}

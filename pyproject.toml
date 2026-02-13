@@ -1,0 +1,53 @@
+[project]
+name = "telegram-multiagent"
+version = "0.1.0"
+description = "Multi-agent system for Telegram channel auto-posting and management"
+requires-python = ">=3.11"
+dependencies = [
+    # Telegram
+    "aiogram>=3.20,<4.0",
+    # AI
+    "anthropic>=0.78,<1.0",
+    # Web framework
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.34,<1.0",
+    "jinja2>=3.1,<4.0",
+    # Database
+    "sqlalchemy[asyncio]>=2.0.36,<3.0",
+    "aiosqlite>=0.21,<1.0",
+    # Scheduling
+    "apscheduler>=3.11,<4.0",
+    # Configuration
+    "pydantic-settings>=2.12,<3.0",
+    "pyyaml>=6.0,<7.0",
+    # Web scraping / content extraction
+    "httpx>=0.28,<1.0",
+    "beautifulsoup4>=4.12,<5.0",
+    "pdfplumber>=0.11,<1.0",
+    "youtube-transcript-api>=1.0,<2.0",
+    # Search
+    "tavily-python>=0.5,<1.0",
+    # Utilities
+    "tenacity>=9.0,<10.0",
+    "python-dotenv>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.24,<1.0",
+    "pytest-cov>=6.0,<7.0",
+    "ruff>=0.9,<1.0",
+    "mypy>=1.13,<2.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
