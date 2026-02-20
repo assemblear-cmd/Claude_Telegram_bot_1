@@ -32,17 +32,17 @@ async def main() -> None:
     await _seed_schedule_slots(session_factory, settings)
 
     # 4. Services
-    from src.services.claude_client import ClaudeClient
+    from src.services.gemini_client import GeminiClient
     from src.services.link_validator import LinkValidatorService
     from src.services.pdf_extractor import PdfExtractorService
     from src.services.scraper import ScraperService
     from src.services.web_search import WebSearchService
     from src.services.youtube_transcript import YouTubeTranscriptService
 
-    claude = ClaudeClient(
-        api_key=settings.anthropic_api_key.get_secret_value(),
+    gemini = GeminiClient(
+        api_key=settings.gemini_api_key.get_secret_value(),
         default_model=settings.get_agent_config("writer").get(
-            "claude_model", "claude-sonnet-4-5-20250929"
+            "gemini_model", "gemini-2.0-flash"
         ),
     )
     web_search = WebSearchService(
@@ -80,13 +80,13 @@ async def main() -> None:
             settings.get_agent_config("parser"), scraper, pdf_extractor, youtube
         ),
         "content_writer": ContentWriter(
-            settings.get_agent_config("writer"), claude
+            settings.get_agent_config("writer"), gemini
         ),
         "fact_checker": FactChecker(
-            settings.get_agent_config("fact_checker"), claude
+            settings.get_agent_config("fact_checker"), gemini
         ),
         "link_inserter": LinkInserter(
-            settings.get_agent_config("link_inserter"), claude, link_validator
+            settings.get_agent_config("link_inserter"), gemini, link_validator
         ),
         "post_scheduler": PostScheduler(
             settings.get_agent_config("scheduler")
@@ -119,7 +119,7 @@ async def main() -> None:
             password=settings.ig_password.get_secret_value(),
         )
         photo_analyzer = PhotoAnalyzerService(
-            api_key=settings.anthropic_api_key.get_secret_value(),
+            api_key=settings.gemini_api_key.get_secret_value(),
         )
         agency_scheduler = AgencySchedulerService(
             session_factory=session_factory,

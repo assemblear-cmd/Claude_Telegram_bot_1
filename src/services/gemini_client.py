@@ -1,4 +1,4 @@
-"""Async Anthropic Claude API wrapper with retry and prompt rendering."""
+"""Async Google Gemini API wrapper with retry and prompt rendering."""
 
 from __future__ import annotations
 
@@ -6,19 +6,27 @@ import json
 import logging
 from typing import Any
 
-from anthropic import AsyncAnthropic
+import google.generativeai as genai
 
 from src.utils.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
 
-class ClaudeClient:
-    """Wrapper around AsyncAnthropic with retry, prompt templates, and JSON parsing."""
+class GeminiClient:
+    """Wrapper around Google Gemini with retry, prompt templates, and JSON parsing."""
 
-    def __init__(self, api_key: str, default_model: str = "claude-sonnet-4-5-20250929"):
-        self.client = AsyncAnthropic(api_key=api_key)
+    def __init__(self, api_key: str, default_model: str = "gemini-2.0-flash"):
+        genai.configure(api_key=api_key)
         self.default_model = default_model
+
+    def _get_model(
+        self, model: str | None = None, system: str | None = None
+    ) -> genai.GenerativeModel:
+        return genai.GenerativeModel(
+            model_name=model or self.default_model,
+            system_instruction=system or None,
+        )
 
     @with_retry(max_attempts=3, min_wait=2, max_wait=30)
     async def complete(
@@ -30,24 +38,22 @@ class ClaudeClient:
         system: str | None = None,
         temperature: float = 0.7,
     ) -> str:
-        """Send a prompt to Claude and return the text response."""
-        messages = [{"role": "user", "content": prompt}]
-        kwargs: dict[str, Any] = {
-            "model": model or self.default_model,
-            "max_tokens": max_tokens,
-            "messages": messages,
-            "temperature": temperature,
-        }
-        if system:
-            kwargs["system"] = system
+        """Send a prompt to Gemini and return the text response."""
+        gemini_model = self._get_model(model, system)
 
-        response = await self.client.messages.create(**kwargs)
-        text = response.content[0].text
+        response = await gemini_model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        text = response.text
         logger.debug(
-            "Claude response: model=%s, tokens=%d/%d",
-            response.model,
-            response.usage.input_tokens,
-            response.usage.output_tokens,
+            "Gemini response: model=%s, prompt_tokens=%s, completion_tokens=%s",
+            model or self.default_model,
+            getattr(response.usage_metadata, "prompt_token_count", "?"),
+            getattr(response.usage_metadata, "candidates_token_count", "?"),
         )
         return text
 

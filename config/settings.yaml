@@ -17,7 +17,7 @@ agents:
       - youtube
 
   writer:
-    claude_model: "claude-sonnet-4-5-20250929"
+    gemini_model: "gemini-2.0-flash"
     max_tokens_concept: 200
     max_tokens_draft: 2000
     max_tokens_format: 1500
@@ -54,7 +54,7 @@ agents:
         {draft}
 
   fact_checker:
-    claude_model: "claude-sonnet-4-5-20250929"
+    gemini_model: "gemini-2.0-flash"
     confidence_threshold: 0.7
     max_retries: 2
     prompt: |
@@ -79,7 +79,7 @@ agents:
   link_inserter:
     max_links_per_post: 5
     link_check_timeout: 10
-    claude_model: "claude-sonnet-4-5-20250929"
+    gemini_model: "gemini-2.0-flash"
     prompt: |
       Ты специалист по расстановке ссылок в тексте.
 

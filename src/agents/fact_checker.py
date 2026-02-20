@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentStatus, BaseAgent
 from src.db.models import Post, PostSource, RawMaterial
-from src.services.claude_client import ClaudeClient
+from src.services.gemini_client import GeminiClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 class FactChecker(BaseAgent):
     """Cross-reference post content with original sources for accuracy."""
 
-    def __init__(self, config: dict[str, Any], claude: ClaudeClient):
+    def __init__(self, config: dict[str, Any], gemini: GeminiClient):
         super().__init__(config)
-        self.claude = claude
-        self.model = config.get("claude_model", "claude-sonnet-4-5-20250929")
+        self.gemini = gemini
+        self.model = config.get("gemini_model", "gemini-2.0-flash")
         self.confidence_threshold = config.get("confidence_threshold", 0.7)
         self.prompt_template = config.get("prompt", "")
 
@@ -46,15 +46,15 @@ class FactChecker(BaseAgent):
         # Load source materials
         materials_text = await self._get_materials_text(session, post_id)
 
-        # Run fact-check via Claude
-        prompt = self.claude.render_prompt(
+        # Run fact-check via Gemini
+        prompt = self.gemini.render_prompt(
             self.prompt_template,
             post_text=post_text,
             materials=materials_text[:10000],
         )
 
         try:
-            result_data = await self.claude.complete_json(prompt, model=self.model)
+            result_data = await self.gemini.complete_json(prompt, model=self.model)
         except (json.JSONDecodeError, Exception) as e:
             logger.warning("Fact-check JSON parse failed: %s", e)
             # If we can't parse, pass with a warning

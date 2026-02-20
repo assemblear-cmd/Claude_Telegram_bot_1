@@ -1,4 +1,4 @@
-"""Agent 4: Content Writer — 3-stage content creation using Claude API."""
+"""Agent 4: Content Writer — 3-stage content creation using Gemini API."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentStatus, BaseAgent
 from src.db.models import Post, PostSource, RawMaterial
-from src.services.claude_client import ClaudeClient
+from src.services.gemini_client import GeminiClient
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 class ContentWriter(BaseAgent):
     """3-stage content creation: concept → draft → formatted Telegram post."""
 
-    def __init__(self, config: dict[str, Any], claude: ClaudeClient):
+    def __init__(self, config: dict[str, Any], gemini: GeminiClient):
         super().__init__(config)
-        self.claude = claude
-        self.model = config.get("claude_model", "claude-sonnet-4-5-20250929")
+        self.gemini = gemini
+        self.model = config.get("gemini_model", "gemini-2.0-flash")
         self.max_tokens_concept = config.get("max_tokens_concept", 200)
         self.max_tokens_draft = config.get("max_tokens_draft", 2000)
         self.max_tokens_format = config.get("max_tokens_format", 1500)
@@ -83,13 +83,13 @@ class ContentWriter(BaseAgent):
     ) -> str:
         """Stage 1: Generate a single-sentence concept."""
         prompt_template = self.prompts.get("concept", "")
-        prompt = self.claude.render_prompt(
+        prompt = self.gemini.render_prompt(
             prompt_template, topic=topic, materials=materials[:5000]
         )
         if admin_notes:
             prompt += f"\n\nУчти следующие правки от редактора:\n{admin_notes}"
 
-        return await self.claude.complete(
+        return await self.gemini.complete(
             prompt, model=self.model, max_tokens=self.max_tokens_concept
         )
 
@@ -102,7 +102,7 @@ class ContentWriter(BaseAgent):
     ) -> str:
         """Stage 2: Generate full draft from concept."""
         prompt_template = self.prompts.get("draft", "")
-        prompt = self.claude.render_prompt(
+        prompt = self.gemini.render_prompt(
             prompt_template,
             concept=concept,
             materials=materials[:8000],
@@ -113,17 +113,17 @@ class ContentWriter(BaseAgent):
         if fact_notes:
             prompt += f"\n\nЗамечания фактчекера (исправь эти проблемы):\n{fact_notes}"
 
-        return await self.claude.complete(
+        return await self.gemini.complete(
             prompt, model=self.model, max_tokens=self.max_tokens_draft
         )
 
     async def _format_for_telegram(self, draft: str) -> str:
         """Stage 3: Format draft for Telegram."""
         prompt_template = self.prompts.get("format", "")
-        prompt = self.claude.render_prompt(
+        prompt = self.gemini.render_prompt(
             prompt_template, draft=draft, max_chars=self.max_chars
         )
-        return await self.claude.complete(
+        return await self.gemini.complete(
             prompt, model=self.model, max_tokens=self.max_tokens_format
         )
 

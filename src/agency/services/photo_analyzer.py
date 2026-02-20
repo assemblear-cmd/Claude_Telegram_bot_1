@@ -1,12 +1,13 @@
-"""Photo analysis service using Claude Vision API."""
+"""Photo analysis service using Google Gemini Vision API."""
 
 from __future__ import annotations
 
 import base64
+import json
 import logging
 from pathlib import Path
 
-import anthropic
+import google.generativeai as genai
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agency import repository as repo
@@ -38,11 +39,11 @@ Return ONLY the JSON object, nothing else."""
 
 
 class PhotoAnalyzerService:
-    """Analyzes photos using Claude Vision to determine suitability."""
+    """Analyzes photos using Gemini Vision to determine suitability."""
 
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-5-20250929") -> None:
-        self._client = anthropic.Anthropic(api_key=api_key)
-        self._model = model
+    def __init__(self, api_key: str, model: str = "gemini-2.0-flash") -> None:
+        genai.configure(api_key=api_key)
+        self._model_name = model
 
     def analyze_image(self, image_path: Path) -> dict | None:
         """Analyze a single image file. Returns parsed analysis dict."""
@@ -63,29 +64,19 @@ class PhotoAnalyzerService:
             }
             media_type = media_types.get(suffix, "image/jpeg")
 
-            response = self._client.messages.create(
-                model=self._model,
-                max_tokens=500,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_data,
-                                },
-                            },
-                            {"type": "text", "text": ANALYSIS_PROMPT},
-                        ],
-                    }
+            model = genai.GenerativeModel(self._model_name)
+            response = model.generate_content(
+                [
+                    {"inline_data": {"mime_type": media_type, "data": image_data}},
+                    ANALYSIS_PROMPT,
                 ],
+                generation_config=genai.GenerationConfig(
+                    temperature=0.2,
+                    max_output_tokens=500,
+                ),
             )
 
-            import json
-            text = response.content[0].text.strip()
+            text = response.text.strip()
             # Strip markdown code fences if present
             if text.startswith("```"):
                 text = text.split("\n", 1)[1]

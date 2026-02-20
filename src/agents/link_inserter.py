@@ -11,25 +11,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentStatus, BaseAgent
 from src.db.models import Post, PostLink, PostSource, RawMaterial, Source
-from src.services.claude_client import ClaudeClient
+from src.services.gemini_client import GeminiClient
 from src.services.link_validator import LinkValidatorService
 
 logger = logging.getLogger(__name__)
 
 
 class LinkInserter(BaseAgent):
-    """Insert inline links into the post text using Claude to match keywords to sources."""
+    """Insert inline links into the post text using Gemini to match keywords to sources."""
 
     def __init__(
         self,
         config: dict[str, Any],
-        claude: ClaudeClient,
+        gemini: GeminiClient,
         link_validator: LinkValidatorService,
     ):
         super().__init__(config)
-        self.claude = claude
+        self.gemini = gemini
         self.validator = link_validator
-        self.model = config.get("claude_model", "claude-sonnet-4-5-20250929")
+        self.model = config.get("gemini_model", "gemini-2.0-flash")
         self.max_links = config.get("max_links_per_post", 5)
         self.prompt_template = config.get("prompt", "")
 
@@ -61,8 +61,8 @@ class LinkInserter(BaseAgent):
                 warnings=["No sources available for linking"],
             )
 
-        # Use Claude to find keywords for links
-        prompt = self.claude.render_prompt(
+        # Use Gemini to find keywords for links
+        prompt = self.gemini.render_prompt(
             self.prompt_template,
             post_text=post_text,
             sources=sources_info,
@@ -70,7 +70,7 @@ class LinkInserter(BaseAgent):
         )
 
         try:
-            links_data = await self.claude.complete_json(prompt, model=self.model)
+            links_data = await self.gemini.complete_json(prompt, model=self.model)
         except Exception as e:
             logger.warning("Link insertion JSON parse failed: %s", e)
             post.final_text = post_text

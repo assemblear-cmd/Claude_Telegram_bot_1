@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     telegram_admin_ids: str = ""
 
     # AI
-    anthropic_api_key: SecretStr = SecretStr("")
+    gemini_api_key: SecretStr = SecretStr("")
 
     # Search
     tavily_api_key: SecretStr = SecretStr("")
