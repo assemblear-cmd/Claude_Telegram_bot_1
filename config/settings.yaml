@@ -99,17 +99,19 @@ agents:
     timezone: "Europe/Moscow"
     default_slots:
       - day: 0
-        time: "09:00"
-      - day: 0
-        time: "18:00"
+        time: "10:00"
+      - day: 1
+        time: "10:00"
       - day: 2
-        time: "09:00"
-      - day: 2
-        time: "18:00"
+        time: "10:00"
+      - day: 3
+        time: "10:00"
       - day: 4
-        time: "09:00"
-      - day: 4
-        time: "18:00"
+        time: "10:00"
+      - day: 5
+        time: "10:00"
+      - day: 6
+        time: "10:00"
 
   publisher:
     preview_before_publish: true
