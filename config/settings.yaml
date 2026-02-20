@@ -1,4 +1,4 @@
-app_name: "Telegram MultiAgent Publisher"
+app_name: "Agency42"
 log_level: INFO
 
 agents:

@@ -107,19 +107,51 @@ async def main() -> None:
     from src.services.scheduler_service import SchedulerService
     scheduler_service = SchedulerService(orchestrator, session_factory)
 
+    # 8a. Agency42 services
+    agency_scheduler = None
+    if settings.ig_username and settings.ig_password.get_secret_value():
+        from src.agency.services.instagram_client import InstagramClient
+        from src.agency.services.photo_analyzer import PhotoAnalyzerService
+        from src.agency.services.scheduler import AgencySchedulerService
+
+        ig_client = InstagramClient(
+            username=settings.ig_username,
+            password=settings.ig_password.get_secret_value(),
+        )
+        photo_analyzer = PhotoAnalyzerService(
+            api_key=settings.anthropic_api_key.get_secret_value(),
+        )
+        agency_scheduler = AgencySchedulerService(
+            session_factory=session_factory,
+            ig_client=ig_client,
+            analyzer=photo_analyzer,
+        )
+        logger.info("Agency42 module initialized for @%s", settings.ig_username)
+    else:
+        logger.info("Agency42 module disabled (no IG credentials)")
+
+    # 8b. Seed agency models
+    await _seed_agency_models(session_factory)
+
     # 9. Dispatcher
     from src.bot.setup import create_dispatcher
     dp = create_dispatcher(orchestrator, session_factory, settings.admin_ids_list)
 
     # 10. Web app
     from src.web.app import create_web_app
-    web_app = create_web_app(orchestrator, session_factory, scheduler_service)
+    web_app = create_web_app(
+        orchestrator, session_factory, scheduler_service, agency_scheduler
+    )
 
     # 11. Start everything
     logger.info("All components initialized. Starting services...")
 
     # Start scheduler
     await scheduler_service.start()
+
+    # Start agency scheduler
+    if agency_scheduler:
+        await agency_scheduler.start()
 
     # Create tasks
     bot_task = asyncio.create_task(
@@ -161,6 +193,8 @@ async def main() -> None:
 
     # Cleanup
     logger.info("Shutting down...")
+    if agency_scheduler:
+        await agency_scheduler.stop()
     await scheduler_service.stop()
     await dp.stop_polling()
     server.should_exit = True
@@ -197,6 +231,54 @@ async def _seed_schedule_slots(session_factory, settings) -> None:
         await session.commit()
         if default_slots:
             logger.info("Seeded %d default schedule slots", len(default_slots))
+
+
+async def _seed_agency_models(session_factory) -> None:
+    """Seed the initial list of model Instagram accounts."""
+    from src.agency.models import AgencyModel
+    from src.agency import repository as agency_repo
+
+    INITIAL_MODELS = [
+        ("fluently.jess", "https://www.instagram.com/fluently.jess"),
+        ("lerabuns", "https://www.instagram.com/lerabuns"),
+        ("michellefromchina", "https://www.instagram.com/michellefromchina"),
+        ("alina_vesneva", "https://www.instagram.com/alina_vesneva"),
+        ("mayalanez_", "https://www.instagram.com/mayalanez_"),
+        ("monicaoffchello", "https://www.instagram.com/monicaoffchello"),
+        ("luanamsantillan", "https://www.instagram.com/luanamsantillan"),
+        ("marysmithfairy", "https://www.instagram.com/marysmithfairy"),
+        ("emiliaabrookss", "https://www.instagram.com/emiliaabrookss"),
+        ("morelita.xo", "https://www.instagram.com/morelita.xo"),
+        ("josee.steelman", "https://www.instagram.com/josee.steelman"),
+        ("dps999k", "https://www.instagram.com/dps999k"),
+        ("sophiie_xdt", "https://www.instagram.com/sophiie_xdt"),
+        ("yourlittlesnake", "https://www.instagram.com/yourlittlesnake"),
+        ("virginiaa.nucci", "https://www.instagram.com/virginiaa.nucci"),
+        ("carolinezalog", "https://www.instagram.com/carolinezalog"),
+        ("da_rach3l", "https://www.instagram.com/da_rach3l"),
+        ("rachelc00k", "https://www.instagram.com/rachelc00k"),
+        ("minaashofficial", "https://www.instagram.com/minaashofficial"),
+        ("chennuanyang", "https://www.instagram.com/chennuanyang"),
+        ("linabelfiore", "https://www.instagram.com/linabelfiore"),
+        ("reneeherbert_", "https://www.instagram.com/reneeherbert_"),
+        ("samantha.baio", "https://www.instagram.com/samantha.baio"),
+        ("minaxash", "https://www.instagram.com/minaxash"),
+    ]
+
+    async with session_factory() as session:
+        existing = await agency_repo.list_models(session)
+        if existing:
+            return
+
+        for username, url in INITIAL_MODELS:
+            await agency_repo.create_model(
+                session,
+                username=username,
+                instagram_url=url,
+            )
+
+        await session.commit()
+        logger.info("Seeded %d agency models", len(INITIAL_MODELS))
 
 
 def run() -> None:

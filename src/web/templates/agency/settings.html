@@ -1,0 +1,90 @@
+{% extends "agency/base.html" %}
+{% block title %}Agency42 — Settings{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Settings</h1>
+
+{% if request.query_params.get('saved') %}
+    <div class="alert alert-success">Settings saved.</div>
+{% endif %}
+
+<form method="post" action="/agency/settings">
+    <div class="grid grid-2 gap-2">
+        <!-- Agency account -->
+        <div class="card">
+            <div class="card-header">Agency Instagram Account</div>
+            <div class="form-group">
+                <label>Agency Username</label>
+                <input type="text" name="agency_instagram_username"
+                       value="{{ settings.agency_instagram_username }}">
+            </div>
+            <div class="form-group">
+                <label>Watermark Text</label>
+                <input type="text" name="watermark_text"
+                       value="{{ settings.watermark_text }}">
+            </div>
+        </div>
+
+        <!-- Posting settings -->
+        <div class="card">
+            <div class="card-header">Posting</div>
+            <div class="form-group">
+                <label>Posting Interval (minutes)</label>
+                <input type="number" name="posting_interval_minutes"
+                       value="{{ settings.posting_interval_minutes }}" min="15" max="1440">
+            </div>
+            <div class="form-group">
+                <label>Max Posts Per Day</label>
+                <input type="number" name="max_posts_per_day"
+                       value="{{ settings.max_posts_per_day }}" min="1" max="50">
+            </div>
+            <div class="form-group">
+                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <span class="toggle">
+                        <input type="checkbox" name="auto_posting_enabled"
+                               {{ 'checked' if settings.auto_posting_enabled else '' }}>
+                        <span class="toggle-slider"></span>
+                    </span>
+                    Enable Auto-Posting
+                </label>
+            </div>
+        </div>
+
+        <!-- Scraping settings -->
+        <div class="card">
+            <div class="card-header">Scraping</div>
+            <div class="form-group">
+                <label>Scrape Interval (minutes)</label>
+                <input type="number" name="scrape_interval_minutes"
+                       value="{{ settings.scrape_interval_minutes }}" min="30" max="1440">
+            </div>
+            <div class="form-group">
+                <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <span class="toggle">
+                        <input type="checkbox" name="auto_scrape_enabled"
+                               {{ 'checked' if settings.auto_scrape_enabled else '' }}>
+                        <span class="toggle-slider"></span>
+                    </span>
+                    Enable Auto-Scraping
+                </label>
+            </div>
+        </div>
+
+        <!-- Caption template -->
+        <div class="card">
+            <div class="card-header">Caption Template</div>
+            <div class="form-group">
+                <label>Post Caption Template</label>
+                <textarea name="caption_template" rows="5">{{ settings.caption_template }}</textarea>
+                <div class="text-sm text-muted mt-1">
+                    Variables: <code>{model_username}</code>, <code>{model_name}</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-2">
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+    </div>
+</form>
+{% endblock %}

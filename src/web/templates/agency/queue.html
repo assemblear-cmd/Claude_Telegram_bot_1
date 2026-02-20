@@ -1,0 +1,118 @@
+{% extends "agency/base.html" %}
+{% block title %}Agency42 — Queue{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-2">
+    <h1>Posting Queue</h1>
+    <form method="post" action="/agency/queue/post-next">
+        <button type="submit" class="btn btn-primary">Post Next Now</button>
+    </form>
+</div>
+
+{% if request.query_params.get('posted') %}
+    <div class="alert alert-success">Post #{{ request.query_params.get('posted') }} published.</div>
+{% endif %}
+{% if request.query_params.get('error') == 'no_media' %}
+    <div class="alert alert-error">No suitable media available for posting.</div>
+{% endif %}
+
+<!-- Queued items -->
+<div class="card mb-2">
+    <div class="card-header">Queued Photos ({{ queued_media|length }})</div>
+    {% if queued_media %}
+    <table>
+        <thead>
+            <tr>
+                <th>Preview</th>
+                <th>Model</th>
+                <th>Type</th>
+                <th>Score</th>
+                <th>Scraped</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for media in queued_media %}
+            <tr>
+                <td>
+                    {% if media.thumbnail_url %}
+                        <img src="{{ media.thumbnail_url }}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px;">
+                    {% else %}
+                        <div style="width:48px;height:48px;background:var(--surface2);border-radius:6px;"></div>
+                    {% endif %}
+                </td>
+                <td>@{{ media.model.username if media.model else '?' }}</td>
+                <td>{{ media.media_type }}</td>
+                <td>
+                    {% if media.analysis_score is not none %}
+                        {{ "%.1f"|format(media.analysis_score * 10) }}/10
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="text-sm text-muted">
+                    {{ media.scraped_at.strftime('%d.%m.%Y %H:%M') }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No photos in queue. Approve and queue suitable photos from the Photos page.</p>
+    {% endif %}
+</div>
+
+<!-- Post history -->
+<div class="card">
+    <div class="card-header">Post History</div>
+    {% if recent_posts %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Model</th>
+                <th>Caption</th>
+                <th>Status</th>
+                <th>Published</th>
+                <th>Error</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for post in recent_posts %}
+            <tr>
+                <td>#{{ post.id }}</td>
+                <td>
+                    {% if post.media and post.media.model %}
+                        @{{ post.media.model.username }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="text-sm" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {{ post.caption or '—' }}
+                </td>
+                <td>
+                    {% if post.status == 'published' %}
+                        <span class="badge badge-green">Published</span>
+                    {% elif post.status == 'publishing' %}
+                        <span class="badge badge-yellow">Publishing...</span>
+                    {% elif post.status == 'failed' %}
+                        <span class="badge badge-red">Failed</span>
+                    {% else %}
+                        <span class="badge badge-gray">{{ post.status }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-sm text-muted">
+                    {{ post.published_at.strftime('%d.%m.%Y %H:%M') if post.published_at else '—' }}
+                </td>
+                <td class="text-sm" style="color: var(--red);">
+                    {{ post.error_message or '' }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No posts yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     web_host: str = "0.0.0.0"
     web_port: int = 8000
 
+    # Agency42 (Instagram)
+    ig_username: str = ""
+    ig_password: SecretStr = SecretStr("")
+
     # Non-secret config from YAML
     agents: dict[str, Any] = Field(default_factory=dict)
     pipeline: dict[str, Any] = Field(default_factory=dict)
