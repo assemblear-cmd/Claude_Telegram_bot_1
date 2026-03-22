@@ -1,32 +1,50 @@
 import "dotenv/config";
 import { Bot, InputFile } from "grammy";
-import Replicate from "replicate";
+import { GoogleGenAI, Modality } from "@google/genai";
 
 const PROMPT_PREFIX =
   "Architectural visualization, photorealistic, professional architectural rendering, minimalist style, concrete glass natural wood materials. Building design: ";
 
 const bot = new Bot(process.env.BOT_TOKEN!);
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 async function generateImage(
-  imageUrl: string,
+  imageBuffer: Buffer,
   prompt: string
-): Promise<string> {
-  const output = await replicate.run("black-forest-labs/flux-pro", {
-    input: {
-      prompt: PROMPT_PREFIX + prompt,
-      image: imageUrl,
+): Promise<Buffer> {
+  const base64Image = imageBuffer.toString("base64");
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-image-generation",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: base64Image,
+            },
+          },
+          { text: PROMPT_PREFIX + prompt },
+        ],
+      },
+    ],
+    config: {
+      responseModalities: [Modality.IMAGE, Modality.TEXT],
     },
   });
 
-  if (typeof output === "string") return output;
-  if (Array.isArray(output) && typeof output[0] === "string") return output[0];
-  if (output && typeof output === "object" && "output" in (output as any)) {
-    const val = (output as any).output;
-    if (typeof val === "string") return val;
-    if (Array.isArray(val) && typeof val[0] === "string") return val[0];
+  const parts = response.candidates?.[0]?.content?.parts;
+  if (parts) {
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        return Buffer.from(part.inlineData.data, "base64");
+      }
+    }
   }
-  throw new Error(`Unexpected Replicate output: ${JSON.stringify(output)}`);
+
+  throw new Error("No image in Gemini response");
 }
 
 bot.on("message:photo", async (ctx) => {
@@ -40,12 +58,16 @@ bot.on("message:photo", async (ctx) => {
 
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
   const file = await ctx.api.getFile(photo.file_id);
-  const imageUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN!}/${file.file_path}`;
+  const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN!}/${file.file_path}`;
+
+  // Download the image from Telegram
+  const imageResponse = await fetch(fileUrl);
+  const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const resultUrl = await generateImage(imageUrl, caption);
-      await ctx.replyWithPhoto(new InputFile(new URL(resultUrl)));
+      const resultBuffer = await generateImage(imageBuffer, caption);
+      await ctx.replyWithPhoto(new InputFile(resultBuffer, "result.png"));
       return;
     } catch (err) {
       console.error(`Generation attempt ${attempt} failed:`, err);

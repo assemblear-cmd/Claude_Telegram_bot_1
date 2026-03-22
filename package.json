@@ -1,7 +1,7 @@
 {
   "name": "telegram-image-generation-bot",
   "version": "1.0.0",
-  "description": "Telegram bot for architectural image generation via Replicate API",
+  "description": "Telegram bot for architectural image generation via Nano Banana (Gemini) API",
   "main": "dist/bot.js",
   "scripts": {
     "build": "tsc",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "grammy": "^1.21.1",
-    "replicate": "^0.25.2",
+    "@google/genai": "^1.45.0",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
