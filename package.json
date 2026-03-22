@@ -1,0 +1,21 @@
+{
+  "name": "telegram-image-generation-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for architectural image generation via Replicate API",
+  "main": "dist/bot.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/bot.js",
+    "dev": "ts-node src/bot.ts"
+  },
+  "dependencies": {
+    "grammy": "^1.21.1",
+    "replicate": "^0.25.2",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7",
+    "ts-node": "^10.9.2"
+  }
+}
