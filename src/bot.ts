@@ -2,20 +2,46 @@ import "dotenv/config";
 import { Bot, InputFile } from "grammy";
 import { GoogleGenAI, Modality } from "@google/genai";
 
-const PROMPT_PREFIX =
-  "Architectural visualization, photorealistic, professional architectural rendering, minimalist style, concrete glass natural wood materials. Building design: ";
+const THINKING_MODEL = "gemini-2.5-flash";
+const IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 
 const bot = new Bot(process.env.BOT_TOKEN!);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
+async function enhancePrompt(userPrompt: string): Promise<string> {
+  const response = await ai.models.generateContent({
+    model: THINKING_MODEL,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `You are an expert prompt engineer for architectural image generation.
+Take the user's description and create a detailed, English prompt optimized for image generation.
+Focus on: materials, lighting, camera angle, atmosphere, style.
+Keep it under 200 words. Return ONLY the prompt, no explanations.
+
+User description: ${userPrompt}`,
+          },
+        ],
+      },
+    ],
+  });
+
+  const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No response from thinking model");
+  console.log(`[${THINKING_MODEL}] Enhanced prompt: ${text.substring(0, 100)}...`);
+  return text;
+}
+
 async function generateImage(
   imageBuffer: Buffer,
-  prompt: string
+  enhancedPrompt: string
 ): Promise<Buffer> {
   const base64Image = imageBuffer.toString("base64");
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-image",
+    model: IMAGE_MODEL,
     contents: [
       {
         role: "user",
@@ -26,7 +52,7 @@ async function generateImage(
               data: base64Image,
             },
           },
-          { text: PROMPT_PREFIX + prompt },
+          { text: enhancedPrompt },
         ],
       },
     ],
@@ -34,6 +60,8 @@ async function generateImage(
       responseModalities: [Modality.IMAGE, Modality.TEXT],
     },
   });
+
+  console.log(`[${IMAGE_MODEL}] Generation complete`);
 
   const parts = response.candidates?.[0]?.content?.parts;
   if (parts) {
@@ -60,13 +88,13 @@ bot.on("message:photo", async (ctx) => {
   const file = await ctx.api.getFile(photo.file_id);
   const fileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN!}/${file.file_path}`;
 
-  // Download the image from Telegram
   const imageResponse = await fetch(fileUrl);
   const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const resultBuffer = await generateImage(imageBuffer, caption);
+      const enhancedPrompt = await enhancePrompt(caption);
+      const resultBuffer = await generateImage(imageBuffer, enhancedPrompt);
       await ctx.replyWithPhoto(new InputFile(resultBuffer, "result.png"));
       return;
     } catch (err) {
@@ -91,4 +119,6 @@ bot.catch((err) => {
 });
 
 bot.start();
-console.log("Bot is running...");
+console.log(`Bot is running...`);
+console.log(`Thinking model: ${THINKING_MODEL}`);
+console.log(`Image model: ${IMAGE_MODEL}`);
