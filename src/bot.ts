@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Bot, InputFile, InputMediaBuilder } from "grammy";
+import { Bot, InputFile, InputMediaBuilder, InlineKeyboard } from "grammy";
 import { GoogleGenAI, Modality } from "@google/genai";
 
 const THINKING_MODEL = "gemini-3.1-flash-image-preview";
@@ -24,8 +24,80 @@ interface LastResult {
 }
 const userLastResults = new Map<number, LastResult>();
 
+// Pending save: userId -> true (waiting for project name)
+const pendingSave = new Set<number>();
+
 const bot = new Bot(process.env.BOT_TOKEN!);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+// --- Keyboards ---
+
+function mainMenuKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("📂 Мои проекты", "menu:projects")
+    .text("🔢 Кол-во вариантов", "menu:count")
+    .row()
+    .text("❓ Помощь", "menu:help");
+}
+
+function postGenerationKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("💾 Сохранить", "action:save")
+    .text("🔄 Ещё варианты", "action:more")
+    .row()
+    .text("🔢 Изменить кол-во", "menu:count")
+    .text("📂 Проекты", "menu:projects");
+}
+
+function countKeyboard(currentCount: number): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (let i = 1; i <= 5; i++) {
+    kb.text(i === currentCount ? `[${i}]` : `${i}`, `count:${i}`);
+  }
+  kb.row();
+  for (let i = 6; i <= 10; i++) {
+    kb.text(i === currentCount ? `[${i}]` : `${i}`, `count:${i}`);
+  }
+  kb.row().text("⬅️ Назад", "menu:main");
+  return kb;
+}
+
+function projectsKeyboard(projects: Map<string, Project>): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const [name] of projects) {
+    kb.text(`📁 ${name}`, `project:load:${name}`).row();
+  }
+  kb.text("⬅️ Назад", "menu:main");
+  return kb;
+}
+
+function projectActionsKeyboard(name: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("📂 Загрузить", `project:load:${name}`)
+    .text("🗑 Удалить", `project:confirmdelete:${name}`)
+    .row()
+    .text("⬅️ К проектам", "menu:projects");
+}
+
+function confirmDeleteKeyboard(name: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ Да, удалить", `project:delete:${name}`)
+    .text("❌ Отмена", "menu:projects");
+}
+
+function helpText(): string {
+  return (
+    "📖 Как пользоваться ботом:\n\n" +
+    "📷 Отправьте фото с подписью — начать новый дизайн\n" +
+    "↩️ Ответьте на результат с новым описанием — итерация\n" +
+    "💬 Просто напишите текст — продолжить последний дизайн\n\n" +
+    "Подсказки:\n" +
+    "• Можно писать «3 современный дом» — цифра в начале задаёт кол-во вариантов\n" +
+    "• Ответьте на конкретную картинку, чтобы итерировать именно её"
+  );
+}
+
+// --- Core functions ---
 
 function parseCount(text: string): { count: number; prompt: string } {
   const match = text.match(/^(\d+)\s+(.+)$/s);
@@ -162,7 +234,8 @@ async function runGeneration(
 
   if (successful.length === 1) {
     await ctx.replyWithPhoto(new InputFile(successful[0], "result.png"), {
-      caption: "Ответьте на это сообщение с новым описанием, чтобы продолжить работу над дизайном.",
+      caption: "Готово! Ответьте на это фото с новым описанием для итерации.",
+      reply_markup: postGenerationKeyboard(),
     });
   } else {
     const media = successful.map((buf, i) =>
@@ -170,9 +243,11 @@ async function runGeneration(
     );
     media[0] = InputMediaBuilder.photo(
       new InputFile(successful[0], "result_1.png"),
-      { caption: "Ответьте на любую картинку с новым описанием, чтобы продолжить." }
+      { caption: "Готово! Ответьте на любую картинку с новым описанием для итерации." }
     );
     await ctx.replyWithMediaGroup(media);
+    // Media groups don't support inline keyboards, so send buttons separately
+    await ctx.reply("Что дальше?", { reply_markup: postGenerationKeyboard() });
   }
 
   if (successful.length < count) {
@@ -182,11 +257,27 @@ async function runGeneration(
 
 // --- Commands ---
 
+bot.command("start", async (ctx) => {
+  await ctx.reply(
+    "👋 Привет! Я бот для генерации архитектурных визуализаций.\n\n" +
+    "Отправьте мне фото с описанием — и я создам новый дизайн.\n" +
+    "Или выберите действие:",
+    { reply_markup: mainMenuKeyboard() }
+  );
+});
+
+bot.command("menu", async (ctx) => {
+  await ctx.reply("Главное меню:", { reply_markup: mainMenuKeyboard() });
+});
+
 bot.command("count", async (ctx) => {
   const arg = ctx.match?.trim();
   if (!arg) {
     const current = userCounts.get(ctx.from!.id) ?? DEFAULT_COUNT;
-    await ctx.reply(`Текущее количество: ${current}\nИспользуйте /count N (1-${MAX_COUNT}) чтобы изменить.`);
+    await ctx.reply(
+      `Текущее количество: ${current}\nВыберите новое:`,
+      { reply_markup: countKeyboard(current) }
+    );
     return;
   }
   const n = parseInt(arg, 10);
@@ -195,30 +286,23 @@ bot.command("count", async (ctx) => {
     return;
   }
   userCounts.set(ctx.from!.id, n);
-  await ctx.reply(`Количество генераций установлено: ${n}`);
+  await ctx.reply(`Количество генераций установлено: ${n}`, { reply_markup: mainMenuKeyboard() });
 });
 
 bot.command("save", async (ctx) => {
   const name = ctx.match?.trim();
   if (!name) {
-    await ctx.reply("Укажите имя проекта: /save мой_дом");
+    const userId = ctx.from!.id;
+    const last = userLastResults.get(userId);
+    if (!last) {
+      await ctx.reply("Нет результата для сохранения. Сначала сгенерируйте изображение.");
+      return;
+    }
+    pendingSave.add(userId);
+    await ctx.reply("Введите имя для проекта:");
     return;
   }
-  const userId = ctx.from!.id;
-  const last = userLastResults.get(userId);
-  if (!last) {
-    await ctx.reply("Нет результата для сохранения. Сначала сгенерируйте изображение.");
-    return;
-  }
-  if (!userProjects.has(userId)) {
-    userProjects.set(userId, new Map());
-  }
-  userProjects.get(userId)!.set(name, {
-    imageBuffer: last.imageBuffer,
-    lastPrompt: last.prompt,
-    savedAt: new Date(),
-  });
-  await ctx.reply(`Проект «${name}» сохранён. Используйте /load ${name} чтобы вернуться к нему.`);
+  saveProject(ctx, ctx.from!.id, name);
 });
 
 bot.command("load", async (ctx) => {
@@ -227,23 +311,19 @@ bot.command("load", async (ctx) => {
   const projects = userProjects.get(userId);
 
   if (!name) {
-    await ctx.reply("Укажите имя проекта: /load мой_дом\nСписок проектов: /projects");
+    if (!projects || projects.size === 0) {
+      await ctx.reply("У вас нет сохранённых проектов.", { reply_markup: mainMenuKeyboard() });
+    } else {
+      await ctx.reply("Выберите проект:", { reply_markup: projectsKeyboard(projects) });
+    }
     return;
   }
   if (!projects?.has(name)) {
-    await ctx.reply(`Проект «${name}» не найден. Список проектов: /projects`);
+    await ctx.reply(`Проект «${name}» не найден.`, { reply_markup: mainMenuKeyboard() });
     return;
   }
 
-  const project = projects.get(name)!;
-  userLastResults.set(userId, {
-    imageBuffer: project.imageBuffer,
-    prompt: project.lastPrompt,
-  });
-
-  await ctx.replyWithPhoto(new InputFile(project.imageBuffer, "project.png"), {
-    caption: `Проект «${name}» загружен.\nПоследний промпт: ${project.lastPrompt}\n\nОтветьте на это сообщение с новым описанием, чтобы продолжить.`,
-  });
+  await loadProject(ctx, userId, name);
 });
 
 bot.command("projects", async (ctx) => {
@@ -251,16 +331,13 @@ bot.command("projects", async (ctx) => {
   const projects = userProjects.get(userId);
 
   if (!projects || projects.size === 0) {
-    await ctx.reply("У вас нет сохранённых проектов.\nИспользуйте /save имя после генерации.");
+    await ctx.reply("У вас нет сохранённых проектов.\nСгенерируйте изображение и нажмите 💾 Сохранить.", {
+      reply_markup: mainMenuKeyboard(),
+    });
     return;
   }
 
-  const lines = Array.from(projects.entries()).map(([name, p]) => {
-    const date = p.savedAt.toLocaleDateString("ru-RU");
-    return `• ${name} (${date}) — ${p.lastPrompt.substring(0, 40)}...`;
-  });
-
-  await ctx.reply(`Ваши проекты:\n\n${lines.join("\n")}\n\nИспользуйте /load имя для загрузки.`);
+  await ctx.reply("Ваши проекты:", { reply_markup: projectsKeyboard(projects) });
 });
 
 bot.command("delete", async (ctx) => {
@@ -277,12 +354,165 @@ bot.command("delete", async (ctx) => {
     return;
   }
 
-  projects.delete(name);
-  await ctx.reply(`Проект «${name}» удалён.`);
+  await ctx.reply(`Удалить проект «${name}»?`, { reply_markup: confirmDeleteKeyboard(name) });
+});
+
+// --- Helper functions for project operations ---
+
+async function saveProject(ctx: any, userId: number, name: string): Promise<void> {
+  const last = userLastResults.get(userId);
+  if (!last) {
+    await ctx.reply("Нет результата для сохранения. Сначала сгенерируйте изображение.");
+    return;
+  }
+  if (!userProjects.has(userId)) {
+    userProjects.set(userId, new Map());
+  }
+  userProjects.get(userId)!.set(name, {
+    imageBuffer: last.imageBuffer,
+    lastPrompt: last.prompt,
+    savedAt: new Date(),
+  });
+  await ctx.reply(`✅ Проект «${name}» сохранён!`, { reply_markup: mainMenuKeyboard() });
+}
+
+async function loadProject(ctx: any, userId: number, name: string): Promise<void> {
+  const projects = userProjects.get(userId);
+  const project = projects?.get(name);
+  if (!project) {
+    await ctx.reply(`Проект «${name}» не найден.`, { reply_markup: mainMenuKeyboard() });
+    return;
+  }
+
+  userLastResults.set(userId, {
+    imageBuffer: project.imageBuffer,
+    prompt: project.lastPrompt,
+  });
+
+  await ctx.replyWithPhoto(new InputFile(project.imageBuffer, "project.png"), {
+    caption: `📁 Проект «${name}» загружен.\nПромпт: ${project.lastPrompt}\n\nОтветьте на это фото с новым описанием для итерации.`,
+    reply_markup: postGenerationKeyboard(),
+  });
+}
+
+// --- Callback query handlers (button presses) ---
+
+bot.callbackQuery("menu:main", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText("Главное меню:", { reply_markup: mainMenuKeyboard() });
+});
+
+bot.callbackQuery("menu:projects", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from!.id;
+  const projects = userProjects.get(userId);
+
+  if (!projects || projects.size === 0) {
+    await ctx.editMessageText(
+      "У вас нет сохранённых проектов.\nСгенерируйте изображение и нажмите 💾 Сохранить.",
+      { reply_markup: new InlineKeyboard().text("⬅️ Назад", "menu:main") }
+    );
+  } else {
+    await ctx.editMessageText("Ваши проекты:", { reply_markup: projectsKeyboard(projects) });
+  }
+});
+
+bot.callbackQuery("menu:count", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const current = userCounts.get(ctx.from!.id) ?? DEFAULT_COUNT;
+  await ctx.editMessageText(
+    `Текущее количество вариантов: ${current}\nВыберите новое:`,
+    { reply_markup: countKeyboard(current) }
+  );
+});
+
+bot.callbackQuery("menu:help", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(helpText(), {
+    reply_markup: new InlineKeyboard().text("⬅️ Назад", "menu:main"),
+  });
+});
+
+// Count selection
+bot.callbackQuery(/^count:(\d+)$/, async (ctx) => {
+  const n = parseInt(ctx.match![1], 10);
+  userCounts.set(ctx.from!.id, n);
+  await ctx.answerCallbackQuery(`Установлено: ${n}`);
+  await ctx.editMessageText(
+    `✅ Количество вариантов: ${n}`,
+    { reply_markup: countKeyboard(n) }
+  );
+});
+
+// Save action from post-generation buttons
+bot.callbackQuery("action:save", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from!.id;
+  const last = userLastResults.get(userId);
+  if (!last) {
+    await ctx.reply("Нет результата для сохранения.");
+    return;
+  }
+  pendingSave.add(userId);
+  await ctx.reply("Введите имя для проекта:");
+});
+
+// "More variants" action
+bot.callbackQuery("action:more", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const userId = ctx.from!.id;
+  const last = userLastResults.get(userId);
+  if (!last) {
+    await ctx.reply("Нет изображения для генерации вариантов.");
+    return;
+  }
+  const count = userCounts.get(userId) ?? DEFAULT_COUNT;
+  await ctx.reply(`Генерирую ещё ${count > 1 ? count + " вариантов" : "1 вариант"}...`);
+  await runGeneration(ctx, last.imageBuffer, last.prompt, count);
+});
+
+// Project load
+bot.callbackQuery(/^project:load:(.+)$/, async (ctx) => {
+  const name = ctx.match![1];
+  await ctx.answerCallbackQuery();
+  await loadProject(ctx, ctx.from!.id, name);
+});
+
+// Project delete confirmation
+bot.callbackQuery(/^project:confirmdelete:(.+)$/, async (ctx) => {
+  const name = ctx.match![1];
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(`Удалить проект «${name}»?`, {
+    reply_markup: confirmDeleteKeyboard(name),
+  });
+});
+
+// Project delete confirmed
+bot.callbackQuery(/^project:delete:(.+)$/, async (ctx) => {
+  const name = ctx.match![1];
+  const userId = ctx.from!.id;
+  const projects = userProjects.get(userId);
+
+  if (projects?.has(name)) {
+    projects.delete(name);
+    await ctx.answerCallbackQuery(`Проект «${name}» удалён`);
+  } else {
+    await ctx.answerCallbackQuery(`Проект не найден`);
+  }
+
+  // Show updated projects list
+  if (!projects || projects.size === 0) {
+    await ctx.editMessageText("У вас нет сохранённых проектов.", {
+      reply_markup: new InlineKeyboard().text("⬅️ Назад", "menu:main"),
+    });
+  } else {
+    await ctx.editMessageText("Ваши проекты:", { reply_markup: projectsKeyboard(projects) });
+  }
 });
 
 // --- Photo handler: new photo with caption ---
 bot.on("message:photo", async (ctx) => {
+  pendingSave.delete(ctx.from!.id);
   const caption = ctx.message.caption ?? "";
   if (!caption.trim()) {
     await ctx.reply("Отправьте фото с подписью — описанием желаемого результата.");
@@ -303,6 +533,14 @@ bot.on("message:photo", async (ctx) => {
 // --- Text handler: reply to bot's image or plain text ---
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text;
+  const userId = ctx.from!.id;
+
+  // Handle pending save — user is entering project name
+  if (pendingSave.has(userId) && !text.startsWith("/")) {
+    pendingSave.delete(userId);
+    await saveProject(ctx, userId, text.trim());
+    return;
+  }
 
   // Handle reply to bot's photo — iterate on that image
   const reply = ctx.message.reply_to_message;
@@ -317,13 +555,13 @@ bot.on("message:text", async (ctx) => {
 
     // If no photo in replied message, fall back to user's last result
     if (!imageBuffer) {
-      const last = userLastResults.get(ctx.from!.id);
+      const last = userLastResults.get(userId);
       if (last) imageBuffer = last.imageBuffer;
     }
 
     if (imageBuffer) {
       const { count: inlineCount, prompt } = parseCount(text);
-      const count = inlineCount || (userCounts.get(ctx.from!.id) ?? DEFAULT_COUNT);
+      const count = inlineCount || (userCounts.get(userId) ?? DEFAULT_COUNT);
       await ctx.reply(`Итерирую дизайн (${count > 1 ? count + " вариантов" : "1 вариант"})...`);
       await runGeneration(ctx, imageBuffer, prompt, count);
       return;
@@ -331,26 +569,19 @@ bot.on("message:text", async (ctx) => {
   }
 
   // Plain text without reply — use last result if available
-  const last = userLastResults.get(ctx.from!.id);
+  const last = userLastResults.get(userId);
   if (last && !text.startsWith("/")) {
     const { count: inlineCount, prompt } = parseCount(text);
-    const count = inlineCount || (userCounts.get(ctx.from!.id) ?? DEFAULT_COUNT);
+    const count = inlineCount || (userCounts.get(userId) ?? DEFAULT_COUNT);
     await ctx.reply(`Продолжаю работу над последним дизайном (${count > 1 ? count + " вариантов" : "1 вариант"})...`);
     await runGeneration(ctx, last.imageBuffer, prompt, count);
     return;
   }
 
+  // No context — show menu
   await ctx.reply(
-    "Как пользоваться ботом:\n\n" +
-    "📷 Отправьте фото с подписью — начать новый дизайн\n" +
-    "↩️ Ответьте на результат с новым описанием — итерация\n" +
-    "💬 Просто напишите текст — продолжить последний дизайн\n\n" +
-    "Команды:\n" +
-    "/count N — количество вариантов (1-10)\n" +
-    "/save имя — сохранить проект\n" +
-    "/load имя — загрузить проект\n" +
-    "/projects — список проектов\n" +
-    "/delete имя — удалить проект"
+    "Отправьте фото с описанием, чтобы начать.\nИли выберите действие:",
+    { reply_markup: mainMenuKeyboard() }
   );
 });
 
