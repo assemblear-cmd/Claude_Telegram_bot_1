@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Bot, InputFile } from "grammy";
 import { GoogleGenAI, Modality } from "@google/genai";
 
-const THINKING_MODEL = "gemini-3.1-flash";
+const THINKING_MODEL = "gemini-3.1-flash-image-preview";
 const IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 
 const bot = new Bot(process.env.BOT_TOKEN!);
